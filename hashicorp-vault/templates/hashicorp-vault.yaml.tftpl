@@ -1,0 +1,52 @@
+server:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: ${iam_role_arn}
+%{~ if standalone_mode }
+  standalone:
+    enabled: ${standalone_mode}
+    config: |
+      ui = ${ui_enabled}
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "file" {
+        path = "/vault/data"
+      }
+      seal "awskms" {
+        region      = "${region}"
+        kms_key_id  = "${kms_key_id}"
+      }
+%{~ endif }
+%{~ if high_availability_mode }
+  ha:
+    enabled: ${high_availability_mode}
+    apiAddr: "http://${release_name}.${namespace}:8200"
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = ${ui_enabled}
+        disable_mlock = ${disable_mlock}
+        listener "tcp" {
+          tls_disable = 1
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+        }
+        storage "raft" {
+          path = "/vault/data"
+          retry_join {
+            auto_join         = "provider=k8s namespace=${namespace} label_selector=\"component = server\""
+            auto_join_scheme  = "http"
+          }
+        }
+        service_registration "kubernetes" {}
+        seal "awskms" {
+          region      = "${region}"
+          kms_key_id  = "${kms_key_id}"
+        }
+%{~ endif }
+ui:
+  enabled: ${ui_enabled}
